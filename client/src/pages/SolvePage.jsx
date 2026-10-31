@@ -1,0 +1,115 @@
+import { useEffect, useState } from "react";
+import { useParams, useNavigate, useLocation } from "react-router-dom";
+import axios from "axios";
+import API_BASE_URL from "../config/api";
+import { v4 as uuidv4 } from "uuid";
+import { getAuth, onAuthStateChanged } from "firebase/auth";
+import Editor from "../components/Editor";
+
+const SolvePage = () => {
+  const { questionId, roomId } = useParams();
+  const [question, setQuestion] = useState(null);
+  const [uid, setUid] = useState(null);
+  const navigate = useNavigate();
+  const location = useLocation();
+
+  /* watch Firebase auth */
+  useEffect(() => {
+    const unsub = onAuthStateChanged(getAuth(), (user) =>
+      setUid(user ? user.uid : null)
+    );
+    return unsub;
+  }, []);
+
+  /* fetch the question once */
+  useEffect(() => {
+    (async () => {
+      try {
+        const { data } = await axios.get(
+          `${API_BASE_URL}/api/questions/${questionId}`
+        );
+        setQuestion(data);
+      } catch (e) {
+        console.error("Error fetching question:", e);
+      }
+    })();
+  }, [questionId]);
+
+  /* helpers for room links */
+  const handleCreateRoom = () =>
+    navigate(`/practice/${uuidv4()}/${questionId}`);
+
+  const handleCopyLink = () => {
+    navigator.clipboard.writeText(window.location.href);
+    alert("Invite link copied to clipboard!");
+  };
+
+  const isCollaborative = location.pathname.includes("/practice/");
+  if (!question) return <div className="p-6">Loading…</div>;
+
+  return (
+    <div className="flex flex-col md:flex-row h-[calc(100vh-56px)] md:h-screen overflow-hidden">
+      {/* ---------- left column ---------- */}
+      <div className="w-full md:w-[40%] p-4 sm:p-6 overflow-y-auto border-b md:border-b-0 md:border-r bg-white max-h-[45vh] md:max-h-full">
+        <div className="flex flex-wrap gap-2 mb-3">
+          {isCollaborative ? (
+            <button
+              onClick={handleCopyLink}
+              className="bg-green-600 text-white px-3 py-2 rounded text-xs sm:text-sm active:bg-green-700"
+            >
+              Copy Invite Link
+            </button>
+          ) : (
+            <button
+              onClick={handleCreateRoom}
+              className="bg-blue-600 text-white px-3 py-2 rounded text-xs sm:text-sm active:bg-blue-700"
+            >
+              Create Collaborative Room
+            </button>
+          )}
+        </div>
+
+        <h1 className="text-lg sm:text-2xl font-bold">{question.title}</h1>
+        <p className="text-gray-600 mt-1 text-sm">
+          Difficulty: {question.difficulty}
+        </p>
+
+        <div className="flex flex-wrap gap-2 mt-2">
+          {question.tags.map((tag, i) => (
+            <span key={i} className="px-2 py-1 text-xs bg-gray-200 rounded">
+              {tag}
+            </span>
+          ))}
+        </div>
+
+        <p className="mt-3 whitespace-pre-wrap text-sm sm:text-base">
+          {question.description}
+        </p>
+
+        <h2 className="mt-4 font-semibold text-sm sm:text-base">
+          Sample Testcases:
+        </h2>
+        <ul className="list-disc ml-5 text-xs sm:text-sm text-gray-700">
+          {question.testcases.map((tc, i) => (
+            <li key={i} className="mb-2">
+              <strong>Input:</strong> {tc.input} <br />
+              <strong>Expected:</strong> {tc.expectedOutput}
+            </li>
+          ))}
+        </ul>
+      </div>
+
+      {/* ---------- right column ---------- */}
+      <div className="w-full md:w-[60%] flex-1 min-h-[55vh] md:min-h-0 md:h-full">
+        <Editor
+          testcases={question.testcases}
+          questionId={question._id}
+          userId={uid}
+          roomId={roomId}
+        />
+      </div>
+    </div>
+  );
+};
+
+export default SolvePage;
